@@ -941,6 +941,7 @@ protected:
         std::vector<int8_t> _vConnectedBodyActiveStates; ///< GetConnectedBodyActiveStates
         std::vector<std::string> _vManipsName; ///< name of manipulators in the order other states are stored.
 private:
+        using KinBodyStateSaver::Restore;
         virtual void _RestoreRobot(boost::shared_ptr<RobotBase> robot);
     };
 
@@ -1390,6 +1391,9 @@ protected:
     ConfigurationSpecification _activespec;
 
 private:
+    using KinBody::Init;
+    using KinBody::ExtractInfo;
+
     virtual const char* GetHash() const override {
         return OPENRAVE_ROBOT_HASH;
     }
