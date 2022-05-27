@@ -30,7 +30,15 @@ class RaveDatabase;
 
 void* _SysLoadLibrary(const std::string& lib, bool bLazy=false);
 void* _SysLoadSym(void* lib, const std::string& sym);
-void _SysCloseLibrary(void* lib);
+void  _SysCloseLibrary(void* lib);
+
+// TODO: Deprecated, remove later
+/// \deprecated (12/01/01)
+typedef InterfaceBasePtr(*PluginExportFn_CreateInterface)(InterfaceType type, const std::string& name, const char* pluginhash, EnvironmentBasePtr env) RAVE_DEPRECATED;
+
+// TODO: Deprecated, remove later
+/// \deprecated (12/01/01)
+typedef bool(*PluginExportFn_GetPluginAttributes)(PLUGININFO* pinfo, int size) RAVE_DEPRECATED;
 
 // Holds information about a plugin.
 class Plugin : public UserData, public boost::enable_shared_from_this<Plugin>
@@ -234,5 +242,3 @@ BOOST_TYPEOF_REGISTER_TYPE(RaveDatabase::Plugin)
 #endif
 
 #endif
-
-#include "plugindatabase_impl.hpp"
