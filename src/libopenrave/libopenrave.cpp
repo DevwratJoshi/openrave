@@ -791,7 +791,8 @@ protected:
         if( !_pdefaultsampler ) {
             boost::mutex::scoped_lock lock(_mutexinternal);
             BOOST_ASSERT( _mapenvironments.size() > 0 );
-            _pdefaultsampler = RaveCreateSpaceSampler(_mapenvironments.begin()->second->shared_from_this(), "MT19937");
+            InterfaceBasePtr ifBasePtr = GetDatabase()->Create(_mapenvironments.begin()->second->shared_from_this(), PT_SpaceSampler, "MT19937");
+            _pdefaultsampler = RaveInterfaceCast<SpaceSamplerBase>(ifBasePtr);
         }
         return _pdefaultsampler;
     }
