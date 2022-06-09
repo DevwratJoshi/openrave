@@ -144,8 +144,12 @@ public:
 
     void OnRavePreDestroy();
 
-    bool LoadPlugin(const std::string& pluginname);
+    bool LoadPlugin(std::string pluginname);
 
+    /// \brief Deletes the plugin from the database
+    ///
+    /// It is safe to delete a plugin even if interfaces currently reference it because this function just decrements
+    /// the reference count instead of unloading from memory.
     bool RemovePlugin(const std::string& pluginname);
 
     virtual bool HasInterface(InterfaceType type, const std::string& interfacename);
@@ -158,12 +162,7 @@ public:
 
 protected:
     void _CleanupUnusedLibraries();
-
-    /// \brief Deletes the plugin from the database
-    ///
-    /// It is safe to delete a plugin even if interfaces currently reference it because this function just decrements
-    /// the reference count instead of unloading from memory.
-    std::list<PluginPtr>::iterator _GetPlugin(const std::string& pluginname);
+    PluginPtr _GetPlugin(const std::string& pluginname);
 
     PluginPtr _LoadPlugin(const std::string& _libraryname);
 

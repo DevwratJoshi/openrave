@@ -74,6 +74,8 @@ const char* s_delimiter = ":";
 #include "libopenrave.h"
 #include "plugindatabase.h"
 
+namespace fs = boost::filesystem;
+
 namespace OpenRAVE {
 
 void* _SysLoadLibrary(const std::string& lib, bool bLazy)
@@ -750,20 +752,16 @@ void RaveDatabase::OnRavePreDestroy()
     }
 }
 
-bool RaveDatabase::LoadPlugin(const std::string& pluginname)
+bool RaveDatabase::LoadPlugin(std::string pluginname)
 {
     boost::mutex::scoped_lock lock(_mutex);
-    std::list<PluginPtr>::iterator it = _GetPlugin(pluginname);
-    std::string newpluginname;
-    if( it != _listplugins.end() ) {
+    PluginPtr plugin = _GetPlugin(pluginname);
+    if( plugin ) {
         // since we got a match, use the old name and remove the old library
-        newpluginname = (*it)->ppluginname;
-        _listplugins.erase(it);
+        pluginname = plugin->ppluginname;
+        _listplugins.remove(plugin);
     }
-    else {
-        newpluginname = pluginname;
-    }
-    PluginPtr p = _LoadPlugin(newpluginname);
+    PluginPtr p = _LoadPlugin(pluginname);
     if( !!p ) {
         _listplugins.push_back(p);
     }
@@ -771,14 +769,18 @@ bool RaveDatabase::LoadPlugin(const std::string& pluginname)
     return !!p;
 }
 
+/// \brief Deletes the plugin from the database
+///
+/// It is safe to delete a plugin even if interfaces currently reference it because this function just decrements
+/// the reference count instead of unloading from memory.
 bool RaveDatabase::RemovePlugin(const std::string& pluginname)
 {
     boost::mutex::scoped_lock lock(_mutex);
-    std::list<PluginPtr>::iterator it = _GetPlugin(pluginname);
-    if( it == _listplugins.end() ) {
+    PluginPtr plugin = _GetPlugin(pluginname);
+    if( !plugin ) {
         return false;
     }
-    _listplugins.erase(it);
+    _listplugins.remove(plugin);
     _CleanupUnusedLibraries();
     return true;
 }
@@ -874,28 +876,19 @@ void RaveDatabase::_CleanupUnusedLibraries()
     _listDestroyLibraryQueue.clear();
 }
 
-/// \brief Deletes the plugin from the database
-///
-/// It is safe to delete a plugin even if interfaces currently reference it because this function just decrements
-/// the reference count instead of unloading from memory.
-std::list<PluginPtr>::iterator RaveDatabase::_GetPlugin(const std::string& pluginname)
+PluginPtr RaveDatabase::_GetPlugin(const std::string& pluginname)
 {
-    FOREACH(it,_listplugins) {
-        if( pluginname == (*it)->ppluginname ) {
-            return it;
+    for (PluginPtr ptr : _listplugins) {
+        if (ptr->ppluginname == pluginname) {
+            return ptr;
         }
-    }
 #if defined(HAVE_BOOST_FILESYSTEM)
-    // try matching partial base names without path and extension
-    boost::filesystem::path pluginpath(pluginname);
-    std::string stem = pluginpath.stem().string();
-    FOREACH(it, _listplugins) {
-        if( stem == boost::filesystem::path((*it)->ppluginname).stem() ) {
-            return it;
+        else if (fs::path(pluginname).stem() == fs::path(ptr->ppluginname).stem()) {
+            return ptr;
         }
-    }
 #endif
-    return _listplugins.end();
+    }
+    return PluginPtr();
 }
 
 PluginPtr RaveDatabase::_LoadPlugin(const std::string& _libraryname)
