@@ -885,22 +885,12 @@ std::list<PluginPtr>::iterator RaveDatabase::_GetPlugin(const std::string& plugi
             return it;
         }
     }
-#if defined(HAVE_BOOST_FILESYSTEM) && BOOST_VERSION >= 103600 // stem() was introduced in 1.36
+#if defined(HAVE_BOOST_FILESYSTEM)
     // try matching partial base names without path and extension
-#if defined(BOOST_FILESYSTEM_VERSION) && BOOST_FILESYSTEM_VERSION >= 3
     boost::filesystem::path pluginpath(pluginname);
     std::string stem = pluginpath.stem().string();
-#else
-    boost::filesystem::path pluginpath(pluginname, boost::filesystem::native);
-    std::string stem = pluginpath.stem();
-#endif
     FOREACH(it, _listplugins) {
-#if defined(BOOST_FILESYSTEM_VERSION) && BOOST_FILESYSTEM_VERSION >= 3
-        if( stem == boost::filesystem::path((*it)->ppluginname).stem() )
-#else
-        if( stem == boost::filesystem::path((*it)->ppluginname, boost::filesystem::native).stem() )
-#endif
-        {
+        if( stem == boost::filesystem::path((*it)->ppluginname).stem() ) {
             return it;
         }
     }
@@ -922,16 +912,10 @@ PluginPtr RaveDatabase::_LoadPlugin(const std::string& _libraryname)
 #ifndef _WIN32
     if( plibrary == NULL ) {
         // unix libraries are prefixed with 'lib', first have to split
-#if defined(HAVE_BOOST_FILESYSTEM) && BOOST_VERSION >= 103600 // stem() was introduced in 1.36
-#if defined(BOOST_FILESYSTEM_VERSION) && BOOST_FILESYSTEM_VERSION >= 3
+#if defined(HAVE_BOOST_FILESYSTEM)
         boost::filesystem::path _librarypath(libraryname);
         std::string librarypath = _librarypath.parent_path().string();
         std::string libraryfilename = _librarypath.filename().string();
-#else
-        boost::filesystem::path _librarypath(libraryname, boost::filesystem::native);
-        std::string librarypath = _librarypath.parent_path().string();
-        std::string libraryfilename = _librarypath.filename();
-#endif
         if(( libraryfilename.size() > 3) &&( libraryfilename.substr(0,3) != std::string("lib")) ) {
             libraryname = librarypath;
             if( libraryname.size() > 0 ) {
