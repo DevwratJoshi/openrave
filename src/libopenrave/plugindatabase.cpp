@@ -236,7 +236,7 @@ void Plugin::Destroy()
         boost::mutex::scoped_lock lock(_mutex);
         // do some more checking here, there still might be instances of robots, planners, and sensors out there
         if (plibrary) {
-            RAVELOG_DEBUG("RaveDatabase: closing plugin %s\n", ppluginname.c_str());        // Sleep(10);
+            RAVELOG_INFO_FORMAT("RaveDatabase: closing plugin %s\n", ppluginname.c_str());        // Sleep(10);
             if( pfnDestroyPlugin != NULL ) {
                 pfnDestroyPlugin();
             }
@@ -334,7 +334,7 @@ bool Plugin::Load_DestroyPlugin()
         if( pfnDestroyPlugin == NULL ) {
             pfnDestroyPlugin = (PluginExportFn_DestroyPlugin)_SysLoadSym(plibrary, "DestroyPlugin");
             if( pfnDestroyPlugin == NULL ) {
-                RAVELOG_WARN(str(boost::format("%s: can't load DestroyPlugin function, passing...\n")%ppluginname));
+                RAVELOG_WARN_FORMAT("%s: can't load DestroyPlugin function, passing...\n", ppluginname);
                 return false;
             }
         }
@@ -424,9 +424,9 @@ InterfaceBasePtr Plugin::CreateInterface(InterfaceType type, const std::string& 
         return pinterface;
     }
     catch(const openrave_exception& ex) {
-        RAVELOG_ERROR(str(boost::format("Create Interface: openrave exception , plugin %s: %s\n")%ppluginname%ex.what()));
+        RAVELOG_ERROR_FORMAT("Create Interface: openrave exception , plugin %s: %s\n", ppluginname%ex.what());
         if( ex.GetCode() == ORE_InvalidPlugin ) {
-            RAVELOG_DEBUG(str(boost::format("shared object %s is not a valid openrave plugin\n")%ppluginname));
+            RAVELOG_DEBUG_FORMAT("shared object %s is not a valid openrave plugin\n", ppluginname);
             Destroy();
         }
         else if( ex.GetCode() == ORE_InvalidInterfaceHash ) {
@@ -434,10 +434,10 @@ InterfaceBasePtr Plugin::CreateInterface(InterfaceType type, const std::string& 
         }
     }
     catch(const std::exception& ex) {
-        RAVELOG_ERROR(str(boost::format("Create Interface: unknown exception, plugin %s: %s\n")%ppluginname%ex.what()));
+        RAVELOG_ERROR_FORMAT("Create Interface: unknown exception, plugin %s: %s\n", ppluginname%ex.what());
     }
     catch(...) {
-        RAVELOG_ERROR(str(boost::format("Create Interface: unknown exception, plugin %s\n")%ppluginname));
+        RAVELOG_ERROR_FORMAT("Create Interface: unknown exception, plugin %s\n", ppluginname);
     }
     return InterfaceBasePtr();
 }
@@ -545,7 +545,7 @@ bool RaveDatabase::Init(bool bLoadAllPlugins)
         else
 #endif
         {
-            RAVELOG_WARN(str(boost::format("%s doesn't exist")%installdir));
+            RAVELOG_WARN_FORMAT("%s doesn't exist", installdir);
         }
     }
     boost::filesystem::path pluginsfilename = boost::filesystem::absolute(boost::filesystem::path(installdir));
@@ -570,7 +570,7 @@ bool RaveDatabase::Init(bool bLoadAllPlugins)
     FOREACH(it, vplugindirs) {
         if( it->size() > 0 ) {
             _listplugindirs.push_back(*it);
-            RAVELOG_VERBOSE(str(boost::format("plugin dir: %s")%*it));
+            RAVELOG_INFO_FORMAT("plugin dir: %s", (*it));
         }
     }
     if( bLoadAllPlugins ) {
@@ -641,7 +641,7 @@ InterfaceBasePtr RaveDatabase::Create(EnvironmentBasePtr penv, InterfaceType typ
             nInterfaceNameLength = name.size();
         }
         if( nInterfaceNameLength == 0 ) {
-            RAVELOG_WARN(str(boost::format("interface %s name \"%s\" needs to start with a valid character\n")%RaveGetInterfaceName(type)%name));
+            RAVELOG_WARN_FORMAT("interface %s name \"%s\" needs to start with a valid character\n", RaveGetInterfaceName(type) % name);
             return InterfaceBasePtr();
         }
 
@@ -664,7 +664,7 @@ InterfaceBasePtr RaveDatabase::Create(EnvironmentBasePtr penv, InterfaceType typ
                     pointer = registration->_createfn(penv,sinput);
                     if( !!pointer ) {
                         if( pointer->GetInterfaceType() != type ) {
-                            RAVELOG_FATAL(str(boost::format("plugin interface name %s, type %s, types do not match\n")%name%RaveGetInterfaceName(type)));
+                            RAVELOG_FATAL_FORMAT("plugin interface name %s, type %s, types do not match\n", name%RaveGetInterfaceName(type));
                             pointer.reset();
                         }
                         else {
@@ -686,12 +686,12 @@ InterfaceBasePtr RaveDatabase::Create(EnvironmentBasePtr penv, InterfaceType typ
                 pointer = (*itplugin)->CreateInterface(type, name, hash, penv);
                 if( !!pointer ) {
                     if( strcmp(pointer->GetHash(), hash) ) {
-                        RAVELOG_FATAL(str(boost::format("plugin interface name %s, %s has invalid hash, might be compiled with stale openrave files\n")%name%RaveGetInterfaceName(type)));
+                        RAVELOG_FATAL_FORMAT("plugin interface name %s, %s has invalid hash, might be compiled with stale openrave files\n", name%RaveGetInterfaceName(type));
                         (*itplugin)->_setBadInterfaces.insert(std::make_pair(type,utils::ConvertToLowerCase(name)));
                         pointer.reset();
                     }
                     else if( pointer->GetInterfaceType() != type ) {
-                        RAVELOG_FATAL(str(boost::format("plugin interface name %s, type %s, types do not match\n")%name%RaveGetInterfaceName(type)));
+                        RAVELOG_FATAL_FORMAT("plugin interface name %s, type %s, types do not match\n", name%RaveGetInterfaceName(type));
                         (*itplugin)->_setBadInterfaces.insert(std::make_pair(type,utils::ConvertToLowerCase(name)));
                         pointer.reset();
                     }
@@ -775,7 +775,7 @@ bool RaveDatabase::AddDirectory(const std::string& pdir)
         (void) closedir (dp);
     }
     else {
-        RAVELOG_DEBUG("Couldn't open directory %s\n", pdir.c_str());
+        RAVELOG_INFO_FORMAT("Couldn't open directory %s\n", pdir.c_str());
     }
 #endif
     return true;
@@ -898,7 +898,7 @@ void RaveDatabase::GetLoadedInterfaces(std::map<InterfaceType, std::vector<std::
     FOREACHC(itplugin, _listplugins) {
         PLUGININFO localinfo;
         if( !(*itplugin)->GetInfo(localinfo) ) {
-            RAVELOG_WARN(str(boost::format("failed to get plugin info: %s\n")%(*itplugin)->GetName()));
+            RAVELOG_WARN_FORMAT("failed to get plugin info: %s\n", (*itplugin)->GetName());
         }
         else {
             // for now just return the cached info (so quering is faster)
