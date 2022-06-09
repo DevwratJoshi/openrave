@@ -121,8 +121,6 @@ public:
     /// Destroy all plugins and directories
     virtual void Destroy();
 
-    void GetPlugins(std::list<PluginPtr>& listplugins) const;
-
     InterfaceBasePtr Create(EnvironmentBasePtr penv, InterfaceType type, const std::string& _name);
 
     /// loads all the plugins in this dir

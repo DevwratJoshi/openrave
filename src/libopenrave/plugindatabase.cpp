@@ -569,12 +569,6 @@ void RaveDatabase::Destroy()
     RAVELOG_DEBUG("openrave plugin database destroyed\n");
 }
 
-void RaveDatabase::GetPlugins(std::list<PluginPtr>& listplugins) const
-{
-    boost::mutex::scoped_lock lock(_mutex);
-    listplugins = _listplugins;
-}
-
 InterfaceBasePtr RaveDatabase::Create(EnvironmentBasePtr penv, InterfaceType type, const std::string& _name)
 {
     std::string name=_name;
