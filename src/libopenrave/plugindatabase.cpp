@@ -159,6 +159,63 @@ Plugin::~Plugin()
     Destroy();
 }
 
+bool Plugin::Init(const std::string& libraryname) {
+    fs::path fullpath = fs::canonical(fs::path(libraryname));
+    RAVELOG_INFO_FORMAT("Loading shared library at %s...\n", fullpath.c_str());
+
+    // Try to resolve the path to a file, filling in missing filename parts when necessary.
+    if (!fs::is_regular_file(fullpath)) {
+        RAVELOG_WARN_FORMAT("Object at %s is not a file.\n", fullpath.c_str());
+        return false;
+    }
+
+    if (!fs::exists(fullpath)) {
+        // Try appending a '.so' if the path does not have one
+        if (!fullpath.has_extension()) {
+            fullpath = fs::path(fullpath.string() + PLUGIN_EXT);
+        }
+    }
+    if (!fs::exists(fullpath)) {
+        // Try prefixing the filename with 'lib'
+        if (fullpath.filename().string().size() > 3 && fullpath.filename().string().substr(0, 3) != "lib") {
+            fullpath = fullpath.parent_path() / ("lib" + fullpath.filename().string());
+        }
+    }
+    if (!fs::exists(fullpath)) {
+        RAVELOG_WARN_FORMAT("File at %s does not exist.\n", fullpath.c_str());
+        return false;
+    }
+    plibrary = _SysLoadLibrary(fullpath.string(), OPENRAVE_LAZY_LOADING);
+    if (plibrary == NULL) {
+        // File is not loadable for some reason
+        RAVELOG_WARN_FORMAT("File at %s could not be loaded as a shared object.\n", fullpath.c_str());
+        return false;
+    }
+    ppluginname = fullpath.string();
+
+    if (Load_GetPluginAttributes()) {
+#ifndef _WIN32
+        Dl_info info;
+        dladdr((void*)pfnGetPluginAttributesNew, &info);
+        RAVELOG_DEBUG_FORMAT("Loading plugin: %s\n", info.dli_fname);
+#endif
+    } else {
+        // might not be a plugin
+        RAVELOG_INFO_FORMAT("%s: can't load GetPluginAttributes function, might not be an OpenRAVE plugin\n", ppluginname);
+        return false;
+    }
+    pfnGetPluginAttributesNew(&_infocached, sizeof(_infocached), OPENRAVE_PLUGININFO_HASH);
+    _bInitializing = false;
+    if (OPENRAVE_LAZY_LOADING) {
+        // have confirmed that plugin is ok, so reload with no-lazy loading
+        plibrary = NULL;     // NOTE: for some reason, closing the lazy loaded library can make the system crash, so instead keep the pointer around, but create a new one with RTLD_NOW
+        Destroy();
+        _bShutdown = false;
+    }
+    OnRaveInitialized();
+    return true;
+}
+
 void Plugin::Destroy()
 {
     if( _bInitializing ) {
@@ -728,8 +785,8 @@ void RaveDatabase::ReloadPlugins()
 {
     boost::mutex::scoped_lock lock(_mutex);
     FOREACH(itplugin,_listplugins) {
-        PluginPtr newplugin = _LoadPlugin((*itplugin)->ppluginname);
-        if( !!newplugin ) {
+        PluginPtr newplugin = boost::make_shared<Plugin>(shared_from_this());
+        if( newplugin->Init((*itplugin)->ppluginname) ) {
             *itplugin = newplugin;
         }
     }
@@ -761,12 +818,14 @@ bool RaveDatabase::LoadPlugin(std::string pluginname)
         pluginname = plugin->ppluginname;
         _listplugins.remove(plugin);
     }
-    PluginPtr p = _LoadPlugin(pluginname);
-    if( !!p ) {
+    PluginPtr p = boost::make_shared<Plugin>(shared_from_this());
+    if( p->Init(pluginname) ) {
         _listplugins.push_back(p);
+        _CleanupUnusedLibraries();
+        return true;
     }
     _CleanupUnusedLibraries();
-    return !!p;
+    return false;
 }
 
 /// \brief Deletes the plugin from the database
@@ -889,102 +948,6 @@ PluginPtr RaveDatabase::_GetPlugin(const std::string& pluginname)
 #endif
     }
     return PluginPtr();
-}
-
-PluginPtr RaveDatabase::_LoadPlugin(const std::string& _libraryname)
-{
-    std::string libraryname = _libraryname;
-    void* plibrary = _SysLoadLibrary(libraryname,OPENRAVE_LAZY_LOADING);
-    if( plibrary == NULL ) {
-        // check if PLUGIN_EXT is missing
-        if( libraryname.find(PLUGIN_EXT) == std::string::npos ) {
-            libraryname += PLUGIN_EXT;
-            plibrary = _SysLoadLibrary(libraryname,OPENRAVE_LAZY_LOADING);
-        }
-    }
-#ifndef _WIN32
-    if( plibrary == NULL ) {
-        // unix libraries are prefixed with 'lib', first have to split
-#if defined(HAVE_BOOST_FILESYSTEM)
-        boost::filesystem::path _librarypath(libraryname);
-        std::string librarypath = _librarypath.parent_path().string();
-        std::string libraryfilename = _librarypath.filename().string();
-        if(( libraryfilename.size() > 3) &&( libraryfilename.substr(0,3) != std::string("lib")) ) {
-            libraryname = librarypath;
-            if( libraryname.size() > 0 ) {
-                libraryname += s_filesep;
-            }
-            libraryname += std::string("lib");
-            libraryname += libraryfilename;
-            plibrary = _SysLoadLibrary(libraryname.c_str(),OPENRAVE_LAZY_LOADING);
-        }
-#endif
-    }
-#endif
-
-#ifdef HAVE_BOOST_FILESYSTEM
-    if( plibrary == NULL ) {
-        // try adding from the current plugin libraries
-        FOREACH(itdir,_listplugindirs) {
-            std::string newlibraryname = boost::filesystem::absolute(libraryname,*itdir).string();
-            plibrary = _SysLoadLibrary(newlibraryname,OPENRAVE_LAZY_LOADING);
-            if( !!plibrary ) {
-                libraryname = newlibraryname;
-                break;
-            }
-        }
-    }
-#endif
-    if( plibrary == NULL ) {
-        RAVELOG_WARN("failed to load: %s\n", _libraryname.c_str());
-        return PluginPtr();
-    }
-
-    PluginPtr p(new Plugin(shared_from_this()));
-    p->ppluginname = libraryname;
-    p->plibrary = plibrary;
-
-    try {
-        if( !p->Load_GetPluginAttributes() ) {
-            // might not be a plugin
-            RAVELOG_VERBOSE(str(boost::format("%s: can't load GetPluginAttributes function, might not be an OpenRAVE plugin\n")%libraryname));
-            return PluginPtr();
-        }
-
-        if( p->pfnGetPluginAttributesNew != NULL ) {
-            p->pfnGetPluginAttributesNew(&p->_infocached, sizeof(p->_infocached),OPENRAVE_PLUGININFO_HASH);
-        }
-    }
-    catch(const std::exception& ex) {
-        RAVELOG_WARN(str(boost::format("%s failed to load: %s\n")%libraryname%ex.what()));
-        return PluginPtr();
-    }
-    catch(...) {
-        RAVELOG_WARN(str(boost::format("%s: unknown exception\n")%libraryname));
-        return PluginPtr();
-    }
-
-#ifndef _WIN32
-    Dl_info info;
-    if( p->pfnGetPluginAttributesNew != NULL ) {
-        dladdr((void*)p->pfnGetPluginAttributesNew, &info);
-    }
-    else {
-        dladdr((void*)p->pfnGetPluginAttributes, &info);
-    }
-    RAVELOG_DEBUG("loading plugin: %s\n", info.dli_fname);
-#endif
-
-    p->_bInitializing = false;
-    if( OPENRAVE_LAZY_LOADING ) {
-        // have confirmed that plugin is ok, so reload with no-lazy loading
-        p->plibrary = NULL;     // NOTE: for some reason, closing the lazy loaded library can make the system crash, so instead keep the pointer around, but create a new one with RTLD_NOW
-        p->Destroy();
-        p->_bShutdown = false;
-    }
-
-    p->OnRaveInitialized(); // openrave runtime is most likely loaded already, so can safely initialize
-    return p;
 }
 
 void RaveDatabase::_QueueLibraryDestruction(void* lib)

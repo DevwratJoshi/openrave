@@ -47,6 +47,10 @@ public:
     Plugin(boost::shared_ptr<RaveDatabase> pdatabase);
     virtual ~Plugin();
 
+    // Initializes the plugin. Returns true if initialization succeeded,
+    // false if the path does not exist or an error occurred during loading.
+    bool Init(const std::string& path);
+
     virtual void Destroy();
 
     virtual bool IsValid();
@@ -75,6 +79,7 @@ public:
     void OnRavePreDestroy();
 
 protected:
+
     /// if the library is not loaded yet, wait for it.
     void _confirmLibrary();
 
@@ -163,8 +168,6 @@ public:
 protected:
     void _CleanupUnusedLibraries();
     PluginPtr _GetPlugin(const std::string& pluginname);
-
-    PluginPtr _LoadPlugin(const std::string& _libraryname);
 
     void _QueueLibraryDestruction(void* lib);
 
