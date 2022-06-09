@@ -141,9 +141,7 @@ void _SysCloseLibrary(void* lib)
 Plugin::Plugin(boost::shared_ptr<RaveDatabase> pdatabase)
     : _pdatabase(pdatabase)
     , plibrary(NULL)
-    , pfnCreate(NULL)
     , pfnCreateNew(NULL)
-    , pfnGetPluginAttributes(NULL)
     , pfnGetPluginAttributesNew(NULL)
     , pfnDestroyPlugin(NULL)
     , pfnOnRaveInitialized(NULL)
@@ -247,12 +245,10 @@ void Plugin::Destroy()
             plibrary = NULL;
         }
     }
-    pfnCreate = NULL;
     pfnCreateNew = NULL;
     pfnDestroyPlugin = NULL;
     pfnOnRaveInitialized = NULL;
     pfnOnRavePreDestroy = NULL;
-    pfnGetPluginAttributes = NULL;
     pfnGetPluginAttributesNew = NULL;
     _bShutdown = true;
 }
@@ -276,50 +272,19 @@ bool Plugin::GetInfo(PLUGININFO& info)
 bool Plugin::Load_CreateInterfaceGlobal()
 {
     _confirmLibrary();
-    if ((pfnCreateNew == NULL) &&( pfnCreate == NULL)) {
-        if (pfnCreateNew == NULL) {
-            pfnCreateNew = (PluginExportFn_OpenRAVECreateInterface)_SysLoadSym(plibrary, "OpenRAVECreateInterface");
-        }
-    }
-
     if (pfnCreateNew == NULL) {
-#ifdef _MSC_VER
-        pfnCreate = (PluginExportFn_CreateInterface)_SysLoadSym(plibrary, "?CreateInterface@@YA?AV?$shared_ptr@VInterfaceBase@OpenRAVE@@@boost@@W4InterfaceType@OpenRAVE@@ABV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@PBDV?$shared_ptr@VEnvironmentBase@OpenRAVE@@@2@@Z");
-#else
-        pfnCreate = (PluginExportFn_CreateInterface)_SysLoadSym(plibrary, "_Z15CreateInterfaceN8OpenRAVE10InterfaceTypeERKSsPKcN5boost10shared_ptrINS_15EnvironmentBaseEEE");
-#endif
-        if (pfnCreate == NULL) {
-            pfnCreate = (PluginExportFn_CreateInterface)_SysLoadSym(plibrary, "CreateInterface");
-            if (pfnCreate == NULL) {
-                return false;
-            }
-        }
+        pfnCreateNew = (PluginExportFn_OpenRAVECreateInterface)_SysLoadSym(plibrary, "OpenRAVECreateInterface");
     }
-    return pfnCreateNew != NULL || pfnCreate != NULL;
+    return pfnCreateNew != NULL;
 }
 
 bool Plugin::Load_GetPluginAttributes()
 {
     _confirmLibrary();
-    if ((pfnGetPluginAttributesNew == NULL) || (pfnGetPluginAttributes == NULL)) {
-        if (pfnGetPluginAttributesNew == NULL) {
-            pfnGetPluginAttributesNew = (PluginExportFn_OpenRAVEGetPluginAttributes)_SysLoadSym(plibrary,"OpenRAVEGetPluginAttributes");
-        }
+    if (pfnGetPluginAttributesNew == NULL) {
+        pfnGetPluginAttributesNew = (PluginExportFn_OpenRAVEGetPluginAttributes)_SysLoadSym(plibrary,"OpenRAVEGetPluginAttributes");
     }
-    if(pfnGetPluginAttributesNew == NULL ) {
-#ifdef _MSC_VER
-        pfnGetPluginAttributes = (PluginExportFn_GetPluginAttributes)_SysLoadSym(plibrary, "?GetPluginAttributes@@YA_NPAUPLUGININFO@OpenRAVE@@H@Z");
-#else
-        pfnGetPluginAttributes = (PluginExportFn_GetPluginAttributes)_SysLoadSym(plibrary, "_Z19GetPluginAttributesPN8OpenRAVE10PLUGININFOEi");
-#endif
-        if( !pfnGetPluginAttributes ) {
-            pfnGetPluginAttributes = (PluginExportFn_GetPluginAttributes)_SysLoadSym(plibrary, "GetPluginAttributes");
-            if( !pfnGetPluginAttributes ) {
-                return false;
-            }
-        }
-    }
-    return pfnGetPluginAttributesNew != NULL || pfnGetPluginAttributes != NULL;
+    return pfnGetPluginAttributesNew != NULL;
 }
 
 bool Plugin::Load_DestroyPlugin()
@@ -414,13 +379,7 @@ InterfaceBasePtr Plugin::CreateInterface(InterfaceType type, const std::string& 
         if( !Load_CreateInterfaceGlobal() ) {
             throw openrave_exception(str(boost::format(_("%s: can't load CreateInterface function\n"))%ppluginname),ORE_InvalidPlugin);
         }
-        InterfaceBasePtr pinterface;
-        if( pfnCreateNew != NULL ) {
-            pinterface = pfnCreateNew(type,name,interfacehash,OPENRAVE_ENVIRONMENT_HASH,penv);
-        }
-        else if( pfnCreate != NULL ) {
-            pinterface = pfnCreate(type,name,interfacehash,penv);
-        }
+        InterfaceBasePtr pinterface = pfnCreateNew(type,name,interfacehash,OPENRAVE_ENVIRONMENT_HASH,penv);
         return pinterface;
     }
     catch(const openrave_exception& ex) {
