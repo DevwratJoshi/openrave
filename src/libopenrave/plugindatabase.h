@@ -49,20 +49,13 @@ public:
 
     virtual bool Load_CreateInterfaceGlobal();
 
-    virtual bool Load_GetPluginAttributes();
-
     virtual bool Load_DestroyPlugin();
-
-    virtual bool Load_OnRaveInitialized();
 
     virtual bool Load_OnRavePreDestroy();
 
     bool HasInterface(InterfaceType type, const std::string& name);
 
     InterfaceBasePtr CreateInterface(InterfaceType type, const std::string& name, const char* interfacehash, EnvironmentBasePtr penv);
-
-    /// \brief call to initialize the plugin, if initialized already, then ignore the call.
-    void OnRaveInitialized();
 
     void OnRavePreDestroy();
 
@@ -77,9 +70,7 @@ protected:
 
     void* plibrary;         // loaded library (NULL if not loaded)
     PluginExportFn_OpenRAVECreateInterface pfnCreateNew;
-    PluginExportFn_OpenRAVEGetPluginAttributes pfnGetPluginAttributesNew;
     PluginExportFn_DestroyPlugin pfnDestroyPlugin;
-    PluginExportFn_OnRaveInitialized pfnOnRaveInitialized;
     PluginExportFn_OnRavePreDestroy pfnOnRavePreDestroy;
     PLUGININFO _infocached;
     boost::mutex _mutex;         ///< locked when library is getting updated, only used when plibrary==NULL
@@ -116,7 +107,7 @@ public:
     RaveDatabase();
     virtual ~RaveDatabase();
 
-    virtual bool Init(bool bLoadAllPlugins);
+    virtual void Init(bool bLoadAllPlugins);
 
     /// Destroy all plugins and directories
     virtual void Destroy();
@@ -125,15 +116,13 @@ public:
 
     /// loads all the plugins in this dir
     /// If pdir is already specified, reloads all
-    bool AddDirectory(const std::string& pdir);
+    void LoadPluginsFromPath(const std::string& path);
 
     void ReloadPlugins();
 
-    void OnRaveInitialized();
-
     void OnRavePreDestroy();
 
-    bool LoadPlugin(std::string pluginname);
+    bool LoadPlugin(const std::string& pluginname);
 
     /// \brief Deletes the plugin from the database
     ///
@@ -150,17 +139,18 @@ public:
     UserDataPtr RegisterInterface(InterfaceType type, const std::string& name, const char* interfacehash, const char* envhash, const boost::function<InterfaceBasePtr(EnvironmentBasePtr, std::istream&)>& createfn);
 
 protected:
+    // Attempt to construct an OpenRAVE plugin from sanitized canonical path.
+    bool _LoadPlugin(const std::string& fullpath);
+
     void _CleanupUnusedLibraries();
     PluginPtr _GetPlugin(const std::string& pluginname);
 
     void _QueueLibraryDestruction(void* lib);
 
-    void _InterfaceDestroyCallbackShared(void const* pinterface);
-
     /// \brief makes sure plugin is in scope until after pointer is completely deleted
     void _InterfaceDestroyCallbackSharedPost(std::string name, UserDataPtr plugin);
 
-    void _AddToLoader(PluginPtr p);
+    void _AddToLoader(std::string pluginpath);
 
     void _PluginLoaderThread();
 
@@ -174,7 +164,7 @@ protected:
     //@{
     mutable boost::mutex _mutexPluginLoader;     ///< specifically for loading shared objects
     boost::condition _condLoaderHasWork;
-    std::list<PluginPtr> _listPluginsToLoad;
+    std::vector<std::string> _vPluginsToLoad;
     boost::shared_ptr<boost::thread> _threadPluginLoader;
     bool _bShutdown;
     //@}
