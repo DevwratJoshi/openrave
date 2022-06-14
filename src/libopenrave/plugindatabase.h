@@ -32,6 +32,10 @@ class RaveDatabase;
 class Plugin : public UserData, public boost::enable_shared_from_this<Plugin>
 {
 public:
+    enum class State : uint8_t {
+        PREINIT, VALID, SHUTDOWN,
+    };
+
     Plugin(boost::shared_ptr<RaveDatabase> pdatabase);
     virtual ~Plugin();
 
@@ -75,9 +79,10 @@ protected:
     PLUGININFO _infocached;
     boost::mutex _mutex;         ///< locked when library is getting updated, only used when plibrary==NULL
     boost::condition _cond;
-    bool _bShutdown;         ///< managed by plugin database
-    bool _bInitializing; ///< still in the initialization phase
-    bool _bHasCalledOnRaveInitialized; ///< if true, then OnRaveInitialized has been called and does not need to call it again.
+    //bool _bShutdown;         ///< managed by plugin database
+    //bool _bInitializing; ///< still in the initialization phase
+    //bool _bHasCalledOnRaveInitialized; ///< if true, then OnRaveInitialized has been called and does not need to call it again.
+    State _state;
 
     friend class RaveDatabase;
 };

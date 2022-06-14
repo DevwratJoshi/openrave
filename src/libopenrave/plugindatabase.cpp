@@ -140,9 +140,7 @@ Plugin::Plugin(boost::shared_ptr<RaveDatabase> pdatabase)
     , pfnCreateNew(NULL)
     , pfnDestroyPlugin(NULL)
     , pfnOnRavePreDestroy(NULL)
-    , _bShutdown(false)
-    , _bInitializing(true)
-    , _bHasCalledOnRaveInitialized(false)
+    , _state(State::PREINIT)
 {
 }
 
@@ -175,22 +173,20 @@ bool Plugin::Init(const std::string& libraryname) {
         return false;
     }
     pfnGetPluginAttributesNew(&_infocached, sizeof(_infocached), OPENRAVE_PLUGININFO_HASH);
-    _bInitializing = false;
     if (OPENRAVE_LAZY_LOADING) {
         // have confirmed that plugin is ok, so reload with no-lazy loading
         plibrary = NULL;     // NOTE: for some reason, closing the lazy loaded library can make the system crash, so instead keep the pointer around, but create a new one with RTLD_NOW
         Destroy();
-        _bShutdown = false;
     }
 
-    _bHasCalledOnRaveInitialized = true;
+    _state = State::VALID;
 
     return true;
 }
 
 void Plugin::Destroy()
 {
-    if( _bInitializing ) {
+    if( _state == State::PREINIT ) {
         if( plibrary ) {
             if( OPENRAVE_LAZY_LOADING ) {
                 // NOTE: for some reason, closing the lazy loaded library can make the system crash, so instead keep the memory around, and create a new one with RTLD_NOW if necessary
@@ -222,12 +218,12 @@ void Plugin::Destroy()
     pfnCreateNew = NULL;
     pfnDestroyPlugin = NULL;
     pfnOnRavePreDestroy = NULL;
-    _bShutdown = true;
+    _state = State::SHUTDOWN;
 }
 
 bool Plugin::IsValid()
 {
-    return !_bShutdown;
+    return _state == State::VALID;
 }
 
 const std::string& Plugin::GetName() const
@@ -350,7 +346,7 @@ void Plugin::OnRavePreDestroy()
         // always call destroy regardless of initialization state (safest)
         if( !!pfnOnRavePreDestroy ) {
             pfnOnRavePreDestroy();
-            _bHasCalledOnRaveInitialized = false;
+            _state = State::SHUTDOWN;
         }
     }
 }
@@ -365,7 +361,7 @@ void Plugin::_confirmLibrary()
             if( plibrary ) {
                 return;
             }
-            if( _bShutdown ) {
+            if( _state == State::SHUTDOWN ) {
                 throw openrave_exception(_("library is shutting down"),ORE_InvalidPlugin);
             }
             _cond.wait(lock);
