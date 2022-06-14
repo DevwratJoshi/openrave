@@ -17,6 +17,8 @@
 #ifndef RAVE_PLUGIN_DATABASE_H
 #define RAVE_PLUGIN_DATABASE_H
 
+#include <queue>
+
 #include "openrave/openrave.h"
 #include "openrave/plugininfo.h"
 
@@ -79,9 +81,6 @@ protected:
     PLUGININFO _infocached;
     boost::mutex _mutex;         ///< locked when library is getting updated, only used when plibrary==NULL
     boost::condition _cond;
-    //bool _bShutdown;         ///< managed by plugin database
-    //bool _bInitializing; ///< still in the initialization phase
-    //bool _bHasCalledOnRaveInitialized; ///< if true, then OnRaveInitialized has been called and does not need to call it again.
     State _state;
 
     friend class RaveDatabase;
@@ -144,22 +143,20 @@ public:
     UserDataPtr RegisterInterface(InterfaceType type, const std::string& name, const char* interfacehash, const char* envhash, const boost::function<InterfaceBasePtr(EnvironmentBasePtr, std::istream&)>& createfn);
 
 protected:
-    // Attempt to construct an OpenRAVE plugin from sanitized canonical path.
-    bool _LoadPlugin(const std::string& fullpath);
+    // Test plugin for validity by lazy loading it.
+    bool _TestPlugin(const std::string& fullpath);
 
     void _CleanupUnusedLibraries();
-    PluginPtr _GetPlugin(const std::string& pluginname);
 
     void _QueueLibraryDestruction(void* lib);
 
     /// \brief makes sure plugin is in scope until after pointer is completely deleted
     void _InterfaceDestroyCallbackSharedPost(std::string name, UserDataPtr plugin);
 
-    void _AddToLoader(std::string pluginpath);
-
+    void _AddToLoader(std::string);
     void _PluginLoaderThread();
 
-    std::list<PluginPtr> _listplugins;
+    std::vector<PluginPtr> _listplugins;
     mutable boost::mutex _mutex;     ///< changing plugin database
     std::list<void*> _listDestroyLibraryQueue;
     std::list< boost::weak_ptr<RegisteredInterface> > _listRegisteredInterfaces;
@@ -170,9 +167,11 @@ protected:
     mutable boost::mutex _mutexPluginLoader;     ///< specifically for loading shared objects
     boost::condition _condLoaderHasWork;
     std::vector<std::string> _vPluginsToLoad;
-    boost::shared_ptr<boost::thread> _threadPluginLoader;
+    boost::thread _threadPluginLoader;
     bool _bShutdown;
     //@}
+
+    std::queue<std::string> _queueToLoadPlugins;
 };
 
 } // end namespace OpenRAVE
